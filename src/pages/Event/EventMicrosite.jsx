@@ -1,8 +1,125 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import EventInventory from "./EventInventory";
+import EventSchedule from "./EventSchedule";
+import GuestItinerary from "./GuestItinerary";
+import EventUpdatesPanel from "./EventUpdatesPanel";
+import GuestPersonalization from "./GuestPersonalization";
+import EventCoordinationService from "../../services/EventCoordinationService";
+import RealTimeUpdateService from "../../services/RealTimeUpdateService";
 
-const EventMicrosite = () => {
+const EventMicrosite = ({ eventId = 1, guestId = 1 }) => {
   const [activeTab, setActiveTab] = useState("overview");
+  const [event, setEvent] = useState(null);
+  const [schedule, setSchedule] = useState([]);
+  const [itinerary, setItinerary] = useState(null);
+  const [guestInfo, setGuestInfo] = useState(null);
+  const [updates, setUpdates] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Initialize event data
+  useEffect(() => {
+    try {
+      const eventData = EventCoordinationService.getEventById(eventId);
+      const scheduleData = EventCoordinationService.getEventSchedule(eventId);
+      const itineraryData = EventCoordinationService.getGuestItinerary(guestId, eventId);
+      const guestInfoData = EventCoordinationService.getGuestPersonalization(guestId, eventId);
+      const updatesData = EventCoordinationService.getEventUpdates(eventId);
+      const statsData = EventCoordinationService.getEventStats(eventId);
+
+      setEvent(eventData);
+      setSchedule(scheduleData);
+      setItinerary(itineraryData);
+      setGuestInfo(guestInfoData);
+      setUpdates(updatesData);
+      setStats(statsData);
+
+      if (!eventData) {
+        setError(`Event with ID ${eventId} not found. Available events: 1, 2, 3`);
+      }
+    } catch (err) {
+      console.error("Error loading event data:", err);
+      setError(err.message);
+    }
+
+    // Subscribe to real-time updates
+    if (autoRefresh) {
+      const unsubscribe = EventCoordinationService.subscribeToUpdates((newUpdate) => {
+        if (newUpdate.eventId === eventId) {
+          setUpdates(prev => [newUpdate, ...prev]);
+        }
+      });
+
+      return () => unsubscribe();
+    }
+  }, [eventId, guestId, autoRefresh]);
+
+  // Initialize real-time connection
+  useEffect(() => {
+    if (autoRefresh) {
+      RealTimeUpdateService.initializeWebSocket(eventId, (update) => {
+        if (update.eventId === eventId) {
+          setUpdates(prev => [update, ...prev]);
+        }
+      });
+
+      return () => {
+        RealTimeUpdateService.closeConnection();
+      };
+    }
+  }, [eventId, autoRefresh]);
+
+  const handleUpdateRead = (updateId) => {
+    EventCoordinationService.markUpdateAsRead(updateId);
+    setUpdates(prev => prev.map(u => u.id === updateId ? { ...u, read: true } : u));
+  };
+
+  const handleToggleAutoRefresh = () => {
+    setAutoRefresh(!autoRefresh);
+  };
+
+  const tabs = [
+    { id: "overview", label: "📋 Overview", icon: "overview" },
+    { id: "schedule", label: "📅 Schedule", icon: "schedule" },
+    { id: "itinerary", label: "👤 My Itinerary", icon: "itinerary" },
+    { id: "personalization", label: "🎯 My Info", icon: "personalization" },
+    { id: "updates", label: "⚡ Updates", icon: "updates", badge: updates.filter(u => !u.read).length },
+    { id: "inventory", label: "📦 Inventory", icon: "inventory" },
+  ];
+
+  if (error) {
+    return (
+      <div style={{ 
+        marginTop: "60px", 
+        textAlign: "center", 
+        padding: "40px",
+        color: "white",
+        maxWidth: "1400px",
+        margin: "0 auto"
+      }}>
+        <h2 style={{ color: "#ff6b6b" }}>❌ Error Loading Event</h2>
+        <p style={{ fontSize: "1.1rem", marginBottom: "20px" }}>{error}</p>
+        <p style={{ opacity: "0.7" }}>Try using eventId: 1, 2, or 3</p>
+      </div>
+    );
+  }
+
+  if (!event) {
+    return (
+      <div style={{ 
+        marginTop: "60px", 
+        textAlign: "center", 
+        padding: "40px 20px",
+        color: "white",
+        maxWidth: "1400px",
+        margin: "0 auto"
+      }}>
+        <h2>Loading event details...</h2>
+        <p style={{ opacity: "0.7" }}>Event ID: {eventId}, Guest ID: {guestId}</p>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -27,99 +144,180 @@ const EventMicrosite = () => {
             paddingRight: "24px",
             display: "flex",
             gap: "12px",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
           }}
         >
-          <button
-            onClick={() => setActiveTab("overview")}
-            style={{
-              padding: "10px 16px",
-              background:
-                activeTab === "overview"
-                  ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-                  : "rgba(255, 255, 255, 0.1)",
-              border:
-                activeTab === "overview"
-                  ? "1px solid rgba(255, 255, 255, 0.3)"
-                  : "1px solid rgba(255, 255, 255, 0.2)",
-              color: "white",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontWeight: "500",
-              fontSize: "14px",
-              transition: "all 0.2s ease",
-            }}
-          >
-            📋 Event Overview
-          </button>
-          <button
-            onClick={() => setActiveTab("inventory")}
-            style={{
-              padding: "10px 16px",
-              background:
-                activeTab === "inventory"
-                  ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-                  : "rgba(255, 255, 255, 0.1)",
-              border:
-                activeTab === "inventory"
-                  ? "1px solid rgba(255, 255, 255, 0.3)"
-                  : "1px solid rgba(255, 255, 255, 0.2)",
-              color: "white",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontWeight: "500",
-              fontSize: "14px",
-              transition: "all 0.2s ease",
-            }}
-          >
-            📦 Manage Inventory
-          </button>
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                padding: "10px 16px",
+                background:
+                  activeTab === tab.id
+                    ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                    : "rgba(255, 255, 255, 0.1)",
+                border:
+                  activeTab === tab.id
+                    ? "1px solid rgba(255, 255, 255, 0.3)"
+                    : "1px solid rgba(255, 255, 255, 0.2)",
+                color: "white",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+                transition: "all 0.2s ease",
+                position: "relative",
+              }}
+            >
+              {tab.label}
+              {tab.badge > 0 && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: "-8px",
+                    right: "-8px",
+                    background: "#ff4444",
+                    color: "white",
+                    borderRadius: "50%",
+                    width: "20px",
+                    height: "20px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* Tab Content */}
-      {activeTab === "overview" ? (
-        <div className="container fade-in" style={{ marginTop: "60px" }}>
-          <h1>💍 Sharma–Verma Wedding</h1>
-          <p style={{ opacity: 0.8 }}>
-            📍 Gangtok • 📅 20–22 December 2024
-          </p>
+      <div style={{ 
+        maxWidth: "1400px", 
+        margin: "0 auto", 
+        paddingLeft: "24px", 
+        paddingRight: "24px",
+        marginTop: "24px",
+        paddingBottom: "40px"
+      }}>
+        {/* Overview Tab */}
+        {activeTab === "overview" && (
+          <div>
+            <div style={{ marginBottom: "32px" }}>
+              <h1 style={{ 
+                margin: "0 0 12px 0", 
+                fontSize: "2.5rem",
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text"
+              }}>
+                {event.logo} {event.name}
+              </h1>
+              <p style={{ opacity: 0.8, fontSize: "1.1rem", marginBottom: "8px" }}>
+                📍 {event.location} • 📅 {event.startDate} to {event.endDate}
+              </p>
+              <p style={{ opacity: 0.6, fontSize: "1rem" }}>{event.description}</p>
+            </div>
 
-          {/* Itinerary */}
-          <div className="glass-card" style={{ marginTop: "24px" }}>
-            <h3>📅 Event Itinerary</h3>
-            <ul style={{ marginTop: "10px", lineHeight: "1.8" }}>
-              <li>Day 1 – Arrival & Welcome Dinner</li>
-              <li>Day 2 – Wedding Ceremony</li>
-              <li>Day 3 – Breakfast & Checkout</li>
-            </ul>
-          </div>
+            {/* Event Statistics */}
+            {stats && (
+              <div style={{ marginBottom: "32px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "16px" }}>
+                <div style={{
+                  background: "rgba(255, 255, 255, 0.05)",
+                  backdropFilter: "blur(10px)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  borderRadius: "12px",
+                  padding: "20px",
+                  textAlign: "center"
+                }}>
+                  <h4 style={{ margin: "0 0 8px 0", fontSize: "2.5rem", color: "#667eea" }}>{stats.totalGuests}</h4>
+                  <p style={{ margin: "0", opacity: "0.7", fontSize: "0.9rem" }}>Total Guests</p>
+                </div>
+                <div style={{
+                  background: "rgba(255, 255, 255, 0.05)",
+                  backdropFilter: "blur(10px)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  borderRadius: "12px",
+                  padding: "20px",
+                  textAlign: "center"
+                }}>
+                  <h4 style={{ margin: "0 0 8px 0", fontSize: "2.5rem", color: "#764ba2" }}>{stats.totalDays}</h4>
+                  <p style={{ margin: "0", opacity: "0.7", fontSize: "0.9rem" }}>Event Days</p>
+                </div>
+                <div style={{
+                  background: "rgba(255, 255, 255, 0.05)",
+                  backdropFilter: "blur(10px)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  borderRadius: "12px",
+                  padding: "20px",
+                  textAlign: "center"
+                }}>
+                  <h4 style={{ margin: "0 0 8px 0", fontSize: "2.5rem", color: "#667eea" }}>{stats.totalActivities}</h4>
+                  <p style={{ margin: "0", opacity: "0.7", fontSize: "0.9rem" }}>Activities</p>
+                </div>
+              </div>
+            )}
 
-          {/* Hotel */}
-          <div className="glass-card" style={{ marginTop: "24px" }}>
-            <h3>🏨 Hotel Assignment</h3>
-            <p>Grand Himalayan Resort</p>
-            <p>Room Type: Deluxe Double</p>
+            {/* Quick Info Cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "16px", marginBottom: "24px" }}>
+              <div style={{
+                background: "rgba(255, 255, 255, 0.05)",
+                backdropFilter: "blur(10px)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                borderRadius: "12px",
+                padding: "20px"
+              }}>
+                <h3 style={{ margin: "0 0 12px 0", fontSize: "1.1rem" }}>🏢 Event Type</h3>
+                <p style={{ margin: "0", fontSize: "1.1rem", textTransform: "capitalize", opacity: "0.9" }}>{event.type}</p>
+              </div>
+              <div style={{
+                background: "rgba(255, 255, 255, 0.05)",
+                backdropFilter: "blur(10px)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                borderRadius: "12px",
+                padding: "20px"
+              }}>
+                <h3 style={{ margin: "0 0 12px 0", fontSize: "1.1rem" }}>👤 Organizer</h3>
+                <p style={{ margin: "0", fontSize: "1.1rem", opacity: "0.9" }}>{event.organizer}</p>
+              </div>
+              <div style={{
+                background: "rgba(255, 255, 255, 0.05)",
+                backdropFilter: "blur(10px)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                borderRadius: "12px",
+                padding: "20px"
+              }}>
+                <h3 style={{ margin: "0 0 12px 0", fontSize: "1.1rem" }}>🏨 Venue Hotel</h3>
+                <p style={{ margin: "0", fontSize: "1.1rem", opacity: "0.9" }}>{event.hotel}</p>
+              </div>
+            </div>
           </div>
+        )}
 
-          {/* Live Updates */}
-          <div className="glass-card" style={{ marginTop: "24px" }}>
-            <h3>⚡ Real-Time Updates</h3>
-            <p>✔ Dinner time updated to 8:30 PM</p>
-          </div>
+        {/* Schedule Tab */}
+        {activeTab === "schedule" && <EventSchedule eventId={eventId} schedule={schedule} />}
 
-          {/* AI Suggestions */}
-          <div className="glass-card" style={{ marginTop: "24px" }}>
-            <h3>🤖 AI Recommendations</h3>
-            <ul>
-              <li>✔ Assign nearby rooms for families</li>
-              <li>✔ Suggest spa slots for relaxation-seeking guests</li>
-              <li>✔ Schedule networking dinner for business guests</li>
-            </ul>
-          </div>
-        </div>
-      ) : (
-        <EventInventory />
-      )}
+        {/* Itinerary Tab */}
+        {activeTab === "itinerary" && <GuestItinerary itinerary={itinerary} />}
+
+        {/* Personalization Tab */}
+        {activeTab === "personalization" && <GuestPersonalization guestInfo={guestInfo} />}
+
+        {/* Updates Tab */}
+        {activeTab === "updates" && <EventUpdatesPanel eventId={eventId} updates={updates} onUpdateRead={handleUpdateRead} />}
+
+        {/* Inventory Tab */}
+        {activeTab === "inventory" && <EventInventory />}
+      </div>
     </div>
   );
 };

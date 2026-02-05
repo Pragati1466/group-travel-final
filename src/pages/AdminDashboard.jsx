@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import AuthService from "../services/AuthService";
+import EventManagementPanel from "./Admin/EventManagementPanel";
 import "./AdminDashboard.css";
 
 const AdminDashboard = () => {
@@ -152,7 +153,7 @@ const AdminDashboard = () => {
             <span>➕</span> Add New Guest
           </button>
           <button className="action-btn" onClick={() => navigate("/event/1")}>
-            <span>🏢</span> Create Event
+            <span>🏢</span> View Event Details
           </button>
           <button className="action-btn" onClick={() => navigate("/reports")}>
             <span>📥</span> Generate Report
@@ -161,6 +162,11 @@ const AdminDashboard = () => {
             <span>✨</span> View Insights
           </button>
         </div>
+      </section>
+
+      {/* Event Management Panel */}
+      <section className="event-management-section">
+        <EventManagementPanel />
       </section>
     </div>
   );
